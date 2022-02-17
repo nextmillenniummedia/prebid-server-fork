@@ -171,10 +171,11 @@ type AuctionRequest struct {
 // BidderRequest holds the bidder specific request and all other
 // information needed to process that bidder request.
 type BidderRequest struct {
-	BidRequest     *openrtb2.BidRequest
-	BidderName     openrtb_ext.BidderName
-	BidderCoreName openrtb_ext.BidderName
-	BidderLabels   metrics.AdapterLabels
+	BidRequest            *openrtb2.BidRequest
+	BidderName            openrtb_ext.BidderName
+	BidderCoreName        openrtb_ext.BidderName
+	BidderLabels          metrics.AdapterLabels
+	BidderStoredResponses map[string]json.RawMessage
 }
 
 func (e *exchange) HoldAuction(ctx context.Context, r AuctionRequest, debugLog *DebugLog) (*openrtb2.BidResponse, error) {

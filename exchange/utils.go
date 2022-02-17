@@ -46,6 +46,45 @@ func cleanOpenRTBRequests(ctx context.Context,
 	privacyConfig config.Privacy,
 	account *config.Account) (allowedBidderRequests []BidderRequest, privacyLabels metrics.PrivacyLabels, errs []error) {
 
+	allowedBidderRequests = make([]BidderRequest, 0, 0)
+	//extract to separate function: buildBidderRequestsWithBidResponses
+	//create separate request object for bidder with stored bid responses even if it has real imps
+	var bidderToBidderResponse map[string]BidderRequest
+	if len(req.StoredBidResponses) > 0 {
+		// delete imps with stored bid resp
+		imps := req.BidRequest.Imp
+		req.BidRequest.Imp = nil //or new slice?
+		for _, imp := range imps {
+			if _, ok := req.StoredBidResponses[imp.ID]; !ok {
+				//add real imp back to request
+				req.BidRequest.Imp = append(req.BidRequest.Imp, imp)
+			}
+		}
+		// bidder -> imp id -> stored bid resp
+		bidderToBidderResponse = make(map[string]BidderRequest)
+		for impID, storedData := range req.StoredBidResponses {
+			for bidderName, storedResp := range storedData {
+				if _, ok := bidderToBidderResponse[bidderName]; !ok {
+					//new bidder with stored bid responses
+					bidderStoredResp := make(map[string]json.RawMessage)
+					bidderStoredResp[impID] = storedResp
+					bidderToBidderResponse[bidderName] = BidderRequest{
+						BidderName:            openrtb_ext.BidderName(bidderName),
+						BidderStoredResponses: bidderStoredResp,
+					}
+				} else {
+					bidderToBidderResponse[bidderName].BidderStoredResponses[impID] = storedResp
+				}
+			}
+		}
+	}
+	//add bidder requests with stored bid responses to the list with real bidder requests
+	if len(bidderToBidderResponse) > 0 {
+		for _, v := range bidderToBidderResponse {
+			allowedBidderRequests = append(allowedBidderRequests, v)
+		}
+	}
+
 	impsByBidder, err := splitImps(req.BidRequest.Imp)
 	if err != nil {
 		errs = []error{err}
@@ -109,7 +148,6 @@ func cleanOpenRTBRequests(ctx context.Context,
 	}
 
 	// bidder level privacy policies
-	allowedBidderRequests = make([]BidderRequest, 0, len(allBidderRequests))
 	for _, bidderRequest := range allBidderRequests {
 		bidRequestAllowed := true
 
